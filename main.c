@@ -23,8 +23,7 @@ typedef struct {
     int ac; 
 } RoomSetting;
 
-// --- 2. Prototype (前置聲明) ---
-// 這樣下面的 Input Layer 才能認識 logger
+//讓下面認知到logger
 void logger(Loglevel level, const char* message);
 
 // --- 3. Input Layer ---
@@ -79,7 +78,7 @@ void runAutoControl(RoomSetting* sys) {
     else if (sys->temperature < AC_OFF_TEMP) sys->ac = 0;
 }
 
-// 將所有邏輯判斷（Logic）全部收納在這裡
+//主要條件層
 void handleSystemLogic(RoomSetting *sys, UserCommand choice) {
     switch(choice) {
         case CMD_INVALID:
@@ -87,7 +86,6 @@ void handleSystemLogic(RoomSetting *sys, UserCommand choice) {
             break;
 
         case CMD_MANUAL_CONTROL:
-            // 建議 3：手動控制的判斷逻辑也收進來
             if (sys->mode == AUTO_MODE) {
                 logger(LOG_ERROR, "Manual control blocked! System is in AUTO mode.");
             } else {
@@ -107,7 +105,7 @@ void handleSystemLogic(RoomSetting *sys, UserCommand choice) {
 
         case CMD_INPUT_TEMPERATURE:
             sys->temperature = readTemperature();
-            // 溫度改變後，如果是在 AUTO 模式要立刻觸發溫控
+            // 溫度改變後，如果是在 AUTO 模式立刻觸發溫控
             break;
 
         case CMD_EXIT:
@@ -145,7 +143,7 @@ int main() {
         showMenu();
         currentOpt = readUserCommand();
         
-        // 建議 1：這裡只負責轉發 (Dispatch)，不要寫 if (mode == ...)
+        
         if (currentOpt == CMD_EXIT) {
             handleSystemLogic(&myRoom, currentOpt); // 讓大腦處理退出前的 Log
             break;
