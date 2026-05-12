@@ -4,93 +4,138 @@
 #define AC_ON_TEMP 30
 #define AC_OFF_TEMP 25
 
-// --- 1. Type Definitions ---
 typedef enum { MANUAL_MODE, AUTO_MODE } Mode;
 typedef enum { LOG_INFO, LOG_WARN, LOG_ERROR, LOG_SYSTEM } Loglevel;
-typedef enum {
-    CMD_INVALID = 0, 
-    CMD_MANUAL_CONTROL = 1,
-    CMD_INPUT_TEMPERATURE,
-    CMD_SWITCH_AUTO,
-    CMD_EXIT,
-    CMD_SWITCH_MANUAL
-} UserCommand;
 
 typedef struct {
     Mode mode;
-    int light; 
-    int temperature; 
-    int ac; 
+    int light;
+    int temperature;
+    int ac;
 } RoomSetting;
 
-void logger(Loglevel level, const char* message);
-
-
-// --- 2. 硬體定義 ---
-LiquidCrystal_I2C lcd(0x27, 16, 2);  
-const int lightPin = 12; // 模擬燈光的 LED
-const int acPin = 13;    // 模擬 AC 的 LED 腳位
-
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+const int lightPin = 12;
+const int acPin = 13;
 
 RoomSetting myRoom = {MANUAL_MODE, 0, 25, 0};
 
-
-// --- 4. Control Layer (大腦 & 工具) ---
-void logger(Loglevel level, const char* message) { //作用為傳訊息給電腦跟LCD顯示
-    Serial.print(level == LOG_ERROR ? "[!] " : "[i] "); //LCD很小 節省空間 !代表有事 i代表沒事
+// --- Logger ---
+void logger(Loglevel level, const char* message) {
+    Serial.print(level == LOG_ERROR ? "[!] " : "[i] ");
     Serial.println(message);
-    
 
     lcd.setCursor(0, 1);
-    lcd.print("                "); // 清除該行 LCD不會自己刷掉上個訊息
-    lcd.setCursor(0, 1);//為了放在最左邊第二行
+    lcd.print("                ");
+    lcd.setCursor(0, 1);
     lcd.print(message);
 }
 
+// --- Auto Control ---
 void runAutoControl() {
     if (myRoom.temperature > AC_ON_TEMP) myRoom.ac = 1;
     else if (myRoom.temperature < AC_OFF_TEMP) myRoom.ac = 0;
 }
 
-// --- 5. Output Layer ---
+// --- Output Layer ---
 void renderHardware() {
-    digitalWrite(lightPin, myRoom.light ? HIGH : LOW);//
-    digitalWrite(acPin, myRoom.ac ? HIGH : LOW);// 控制電壓 如果myRoom.ac or myRoom.light 是1 就給high電壓 ex. 5V 就會亮
-    lcd.setCursor(0, 0); //從最總上開始output
-    lcd.print("T:"); lcd.print(myRoom.temperature); //後面用處在於把溫度印出來
-    lcd.print(" L:"); lcd.print(myRoom.light ? "ON" : "OFF");
-    lcd.print(" M:"); lcd.print(myRoom.mode == AUTO_MODE ? "A" : "M");
-}
-    
+    digitalWrite(lightPin, myRoom.light ? HIGH : LOW);
+    digitalWrite(acPin,    myRoom.ac    ? HIGH : LOW);
 
-// --- 6. Arduino 核心結構 ---
-void setup() {//取代初始化
-    Serial.begin(9600); //規定協定
-    lcd.init(); //跟LCD說要開始幹的
-    lcd.backlight();//開燈?
-    
+    lcd.setCursor(0, 0);
+    lcd.print("                "); // 先清第一行，避免殘字
+    lcd.setCursor(0, 0);
+
+    // 16格排法： "T:28 L:ON AC:ON " (16字元)
+    lcd.print("T:");
+    lcd.print(myRoom.temperature);
+    lcd.print(" L:");
+    lcd.print(myRoom.light ? "ON" : "OF");   // 2字元省空間
+    lcd.print(" AC:");
+    lcd.print(myRoom.ac   ? "ON" : "OF");
+    // 右上角顯示模式
+    lcd.setCursor(14, 0);
+    lcd.print(myRoom.mode == AUTO_MODE ? " A" : " M");
+}
+
+// --- Setup ---
+void setup() {
+    Serial.begin(9600);
+    lcd.init();
+    lcd.backlight();
     pinMode(lightPin, OUTPUT);
     pinMode(acPin, OUTPUT);
-    
     logger(LOG_SYSTEM, "System Ready");
+
+    // 提示使用者可用指令
+    Serial.println("Commands: a=AUTO m=MANUAL l=Light c=AC t<num>=Temp");
+    Serial.println("Example: t28 sets temperature to 28");
 }
 
+// --- Loop ---
+void loop() {
+    if (Serial.available() > 0) {
+        char cmd = Serial.read();
 
-void loop() { //取代while 迴圈
-    // 這裡通常會放：讀取感測器數值、檢查 Serial 指令
-    if (Serial.available() > 0) {//電腦有沒有透過USB傳東西?
-        char cmd = Serial.read();//arduino讀盤
-        // 這裡可以根據輸入字元切換模式，例如按 'a' 變 AUTO
-        if (cmd == 'a') { myRoom.mode = AUTO_MODE; logger(LOG_SYSTEM, "Mode: AUTO"); }
-        if (cmd == 'm') { myRoom.mode = MANUAL_MODE; logger(LOG_SYSTEM, "Mode: MANUAL"); }
+        switch (cmd) {
+            case 'a':
+                myRoom.mode = AUTO_MODE;
+                logger(LOG_SYSTEM, "Mode: AUTO");
+                break;
+
+            case 'm':
+                myRoom.mode = MANUAL_MODE;
+                logger(LOG_SYSTEM, "Mode: MANUAL");
+                break;
+
+            // ★補丁1：燈光切換，只有 MANUAL 才能動
+            case 'l':
+                if (myRoom.mode == MANUAL_MODE) {
+                    myRoom.light = !myRoom.light;         // toggle
+                    logger(LOG_INFO, myRoom.light ? "Light ON" : "Light OFF");
+                } else {
+                    logger(LOG_ERROR, "AUTO mode! No manual ctrl");
+                }
+                break;
+
+            // ★補丁2：AC 切換，只有 MANUAL 才能動
+            case 'c':
+                if (myRoom.mode == MANUAL_MODE) {
+                    myRoom.ac = !myRoom.ac;               // toggle
+                    logger(LOG_INFO, myRoom.ac ? "AC ON" : "AC OFF");
+                } else {
+                    logger(LOG_ERROR, "AUTO mode! No manual ctrl");
+                }
+                break;
+
+            // ★補丁3：模擬溫度輸入，格式 t28
+            case 't': {
+                int temp = Serial.parseInt();             // 讀緊接在 't' 後面的數字
+                if (temp == 0 && Serial.peek() != '0') { // parseInt 失敗時回傳 0
+                    logger(LOG_ERROR, "Bad temp format");
+                } else {
+                    myRoom.temperature = temp;
+                    Serial.print("[i] Temp set to ");
+                    Serial.println(temp);
+                    // 如果此時是 AUTO，立刻觸發溫控（跟 C 版行為一致）
+                    if (myRoom.mode == AUTO_MODE) runAutoControl();
+                }
+                break;
+            }
+
+            default:
+                // 忽略換行符號，其他字元才警告
+                if (cmd != '\n' && cmd != '\r') {
+                    logger(LOG_WARN, "Unknown cmd");
+                }
+                break;
+        }
     }
 
     if (myRoom.mode == AUTO_MODE) {
         runAutoControl();
     }
-    
+
     renderHardware();
-    delay(500); // 避免跑太快 LCD 閃爍
+    delay(500);
 }
-
-
