@@ -67,7 +67,7 @@ The AC is simulated using an LED output.
 ---
 
 ## System Architecture
-
+![System Architecture](images/system_architecture.png)
 The system is divided into several functional layers:
 
 1. **Sensor Layer**  
@@ -94,7 +94,7 @@ The system is divided into several functional layers:
 ---
 
 ## FreeRTOS Task Design
-
+![FreeRTOS Task Architecture](images/freertos_task_architecture.png)
 The system uses multiple FreeRTOS tasks to separate responsibilities and improve maintainability.
 
 | Task | Core | Responsibility |
