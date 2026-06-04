@@ -16,6 +16,11 @@ The system is designed around multiple concurrent tasks, shared-state protection
 The final system runs on an ESP32 and uses FreeRTOS task scheduling to separate sensor reading, control logic, hardware rendering, web server handling, WiFi management, data logging, system monitoring, and MQTT communication.
 
 ---
+## Demo Video
+
+[Watch the demo video on YouTube]
+(https://youtube.com/shorts/NA25kLLLWEM?si=l9GKfOoP3N4lEaXU)
+---
 
 ## Features
 
